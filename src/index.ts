@@ -1,37 +1,133 @@
 import express from "express";
+import {Request , Response} from "express";
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
+import { ContentModel, UserModel } from "./db";
+import { config  } from "./config";
+
+import { authMiddleware } from "./Middleware/auth-middleware";
 
 
 const app = express();
+app.use(express.json());
 
-app.post("api/v1/signup" , (req , res) => {
+app.post("/api/v1/signup" , async (req , res) => {
+    //zod validation 
+    const username = req.body.username;
+    const password = req.body.password;
+
+    //hash the password
+    try{
+        await UserModel.create({
+            username : username , 
+            password : password
+        });
+
+        res.json({
+            message : "User signed up !"
+        });
+    }
+    catch(e){
+        res.status(411).json({
+            messgae : "username already taken"
+        })
+    }
+
+})
+
+app.post("/api/v1/signin" , async (req , res) => {
+    const username = req.body.username;
+    const password = req.body.password;
+
+    const user = await UserModel.findOne({
+        username : username,
+        password : password
+    })
+
+    if(user){
+        const token = jwt.sign({
+            id : user._id
+        } , config.JWT_SECRET);
+
+        res.json({
+            token
+        })
+    }
+    else{
+        res.status(403).json({
+            message : "Incorrect Credentials"
+        })
+    }
+})
+
+
+
+
+app.post("/api/v1/content" , authMiddleware ,async (req : Request<{},{},{link:string , type:string}> , res : Response) => {
+    // const token = req.headers.token;
+    // const response = jwt.verify(token , JWT_SECRET);
+    const link = req.body.link;
+    const type = req.body.type;
+    await ContentModel.create({
+        link,
+        type,
+        //@ts-ignore
+        title : req.body.title,
+        //@ts-ignore
+        userId : req.userId,
+        tags : []
+    })
+
+    res.json({
+        message : "Content added !"
+    })
+
+
+})
+
+app.get("/api/v1/content" ,authMiddleware, async (req , res) => {
+    //@ts-ignore
+    const userId = req.userId;
+    const content = await ContentModel.find({
+        userId : userId
+    }).populate('userId' , 'username');
+    if(content.length != 0){
+        res.json({
+            content
+        }
+        )
+    }else{
+        res.json({
+            message : "No content from this user"
+        })
+    }
+
+
+})
+
+app.delete("/api/v1/content" ,authMiddleware , async (req , res) => {
+    const contentId = req.body.contentId;
+    await ContentModel.deleteMany({
+        contentId,
+        //@ts-ignore
+        userId : req.userId
+    });
+    res.json({
+        messgae : "Deleted"
+    })
+
     
 })
 
-app.post("api/v1/signin" , (req , res) => {
+app.post("/api/v1/brain/share" , (req , res) =>{
 
 })
 
-app.post("api/v1/content" , (req , res) => {
-    
-})
-
-app.get("api/v1/content" , (req , res) => {
-    
-})
-
-app.delete("api/v1/content" , (req , res) => {
-    
-})
-
-app.post("api/v1/brain/share" , (req , res) =>{
+app.get("/api/v1/brain/:shareLink" , (req,res) => {
 
 })
 
-app.get("api/v1/brain/:shareLink" , (req,res) => {
-
-})
+app.listen(3000);
 
 
 
